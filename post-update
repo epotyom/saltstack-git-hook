@@ -1,0 +1,77 @@
+#!/bin/bash
+remotename="origin"
+branch=${1##*/}
+echo ""
+echo "branch is $branch"
+minion=$(echo $branch | awk -F"-" '{print $1}')
+state=$(echo $branch | awk -F"-" '{print $2}')
+echo "minion is $minion"
+echo "state is $state"
+
+# check if that is branch deleting request
+if [ ! -f $1 ]; then
+  echo "Branch $branch was deleted! Do nothing"
+  exit 0
+fi
+
+cd /srv
+
+goodcolor="\033[32m"
+badcolor="\033[31m"
+NC='\e[0m'
+
+if [ "$branch" = "master" ]; then
+  echo "master branch, do nothing"
+  exit 0
+fi
+
+echo ""
+echo git --git-dir=.git checkout master
+sudo /usr/bin/git --git-dir=.git checkout master
+if [ $? -ne 0 ]; then
+  echo \-e "${badcolor} checkout master failed ${NC}"
+else
+  echo \-e "${goodcolor} checkout master success ${NC}"
+fi
+
+echo ""
+echo git --git-dir=.git pull $remotename $branch:master
+sudo /usr/bin/git --git-dir=.git pull $remotename $branch:master
+if [ $? -ne 0 ]; then
+  echo \-e "${badcolor} pull failed ${NC}"
+else
+  echo \-e "${goodcolor} pull success ${NC}"
+fi
+
+echo ""
+echo git --git-dir=.git push $remotename master
+sudo /usr/bin/git --git-dir=.git push $remotename master
+if [ $? -ne 0 ]; then
+  echo \-e "${badcolor} push $remotename master failed ${NC}"
+else
+  echo \-e "${goodcolor} push $remotename master success ${NC}"
+fi
+
+echo ""
+echo git --git-dir=.git push $remotename :$branch
+sudo /usr/bin/git --git-dir=.git push $remotename :$branch
+if [ $? -ne 0 ]; then
+  echo \-e "${badcolor} deleteing remote branch $branch FAILED ${NC}"
+else
+  echo \-e "${goodcolor} remote branch $branch deleted successfully ${NC}"
+fi
+
+echo ""
+if [ "$state" == "" ]; then
+	echo salt  --force-color "$minion*" state.highstate test=True
+	sudo salt  --force-color "$minion*" state.highstate test=True
+else
+	echo salt  --force-color "$minion*" state.sls $state test=True
+	sudo salt  --force-color "$minion*" state.sls $state test=True
+fi
+if [ $? -ne 0 ]; then
+  echo \-e "${badcolor} salt command failed ${NC}"
+else
+  echo \-e "${goodcolor} salt command succeed ${NC}"
+fi
+echo "finish"
